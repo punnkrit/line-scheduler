@@ -1,34 +1,50 @@
 # What runs where?
 
-The goal: write a LINE message now, deliver it later, close the laptop.
-Sites supplies the private interface; AWS supplies the clock and sender.
-There is no AI agent deciding when or what to send.
+**Sites is the control panel. AWS holds the schedule and runs the LINE client.**
+After a schedule is accepted, your browser and laptop can close.
 
-```mermaid
-sequenceDiagram
-    participant Sites as Sites interface
-    participant AWS as AWS
-    participant LINE as LINE
-    Sites->>AWS: Upload files, if attached
-    Sites->>AWS: Schedule message and send time
-    AWS->>AWS: Save message and set timer
-    AWS-->>Sites: Scheduled
-    Note over Sites: You can close the browser now
-    Note over AWS: Wait until the scheduled time
-    AWS->>LINE: Send using your saved LINE session
-    LINE-->>AWS: Delivery accepted, or error
-    AWS->>AWS: Save the result
-    Sites->>AWS: Check message status
-    AWS-->>Sites: Show receipt or failure
-```
+[![Architecture map showing the browser, private Sites hosting and server relay, AWS API and worker Lambdas, EventBridge timer, DynamoDB storage, S3 attachments, and LINE.](architecture.svg)](architecture.svg)
 
-Read from top to bottom. **Sites is where you compose; AWS waits and sends; LINE
-receives the message.** The browser is only needed when scheduling or checking
-status. A receipt means LINE accepted the message, not that the recipient read it.
+The boxes show **where code and data live**; the arrows show communication, not
+a timeline. Open the image for a larger view. The login sequence below describes
+the order of events during reconnect.
 
-Inside AWS, Lambda runs the code, EventBridge supplies the timer, DynamoDB stores
-jobs and the encrypted session, and S3 temporarily holds attachments. These are
-parts of the same cloud backend—not additional apps you need to keep open.
+### Read the architecture in four parts
+
+1. **Your browser displays the interface.** Sites hosts its frontend files. When
+   you open the Site, that frontend runs in your browser: it collects your message,
+   selected chat, files, and time, and displays progress and history. An unsaved
+   draft only lives in browser memory.
+2. **Sites also runs a server-side relay.** ChatGPT sign-in protects the private
+   Site. The relay forwards authorized requests to AWS using a server-only bridge
+   secret. It does not store your LINE session or keep the send timer running.
+3. **AWS is the backend, with two separate Lambda functions.** The **API Lambda**
+   saves jobs and creates EventBridge schedules. **EventBridge Scheduler** waits
+   until a job is due, then invokes the **worker Lambda**. The worker runs the
+   bundled Go LINE client, restores the encrypted session, and sends the message.
+   Lambda means code that runs when invoked; it is not a desktop or a VM left on
+   all day. Login, conversation refresh, and immediate sends invoke the worker
+   without waiting for a timer.
+4. **AWS storage outlives each invocation.** DynamoDB holds jobs/results and a
+   separate encrypted LINE session record. S3 holds private attachments. The API
+   grants temporary upload permission, then file bytes go directly from the
+   browser to S3. The worker reads the pinned file version when sending. The
+   storage arrows summarize access: the API has no access to the session table
+   or the session decryption key.
+
+**A scheduled send follows:** browser → Sites relay → API → EventBridge → worker
+→ LINE. The API saves the job before creating the timer; the worker records the
+result. Opening history reads that stored result through the API and relay. LINE's
+receipt means it accepted the message, not that the recipient read it.
+
+**A reconnect follows:** browser → Sites relay → API → worker ↔ LINE. The worker
+starts the login, Sites displays the temporary QR, and you approve on your phone.
+The worker saves the encrypted session in AWS. No laptop process or terminal
+tunnel participates. See the sequence below for the full exchange.
+
+IAM permissions, CloudWatch logs, and the SQS failure queue support the backend;
+they are omitted from the map to keep the main relationships readable. There is
+no AI agent deciding when or what to send.
 
 ## Two repositories
 
