@@ -1,0 +1,13 @@
+.env
+.env.*
+*.pem
+*.dpapi
+session.enc*
+*.har
+*.log
+__pycache__/
+.build/
+.local/
+node_modules
+*.tsbuildinfo
+.DS_Store

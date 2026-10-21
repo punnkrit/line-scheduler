@@ -1,0 +1,5 @@
+{
+  "repository": "https://github.com/punnkrit/line-scheduler-client.git",
+  "commit": "cfcdd463f6f890ba753c491918604c1cb0e4b148",
+  "go_version": "1.27.3"
+}

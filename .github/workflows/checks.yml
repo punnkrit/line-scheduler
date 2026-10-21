@@ -1,0 +1,32 @@
+name: Scheduler checks
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Synthetic backend and cloud-probe tests
+        run: |
+          python3 -m unittest discover -s deploy/aws -p 'test_*.py'
+          python3 -m unittest discover -s deploy/aws-probe -p 'test_*.py'
+      - name: Validate pinned client reference
+        run: |
+          python3 -c 'import json,re; p=json.load(open("client.lock.json")); assert p["repository"]=="https://github.com/punnkrit/line-scheduler-client.git"; assert re.fullmatch("[a-f0-9]{40}",p["commit"])'
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Check application types
+        run: npx tsc --noEmit
