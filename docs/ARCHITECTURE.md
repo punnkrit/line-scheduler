@@ -5,18 +5,30 @@ Sites supplies the private interface; AWS supplies the clock and sender.
 There is no AI agent deciding when or what to send.
 
 ```mermaid
-flowchart LR
-    Browser[Browser: compose and drop files] -->|ChatGPT sign-in| Site[Private ChatGPT Site]
-    Site -->|Server-only bearer token| API[AWS Lambda: scheduling API]
-    Browser -->|Short-lived upload permission| Files[Private S3: attachments]
-    API --> Jobs[DynamoDB: jobs and receipts]
-    API --> Clock[EventBridge Scheduler]
-    Clock --> Sender[Lambda: Python controller + Go LINE client]
-    Sender --> Jobs
-    Sender --> Session[DynamoDB: encrypted LINE session]
-    Sender -->|Pinned version + SHA-256 check| Files
-    Sender -->|Letter Sealing| LINE[LINE conversation]
+sequenceDiagram
+    participant Sites as Sites interface
+    participant AWS as AWS
+    participant LINE as LINE
+    Sites->>AWS: Upload files, if attached
+    Sites->>AWS: Schedule message and send time
+    AWS->>AWS: Save message and set timer
+    AWS-->>Sites: Scheduled
+    Note over Sites: You can close the browser now
+    Note over AWS: Wait until the scheduled time
+    AWS->>LINE: Send using your saved LINE session
+    LINE-->>AWS: Delivery accepted, or error
+    AWS->>AWS: Save the result
+    Sites->>AWS: Check message status
+    AWS-->>Sites: Show receipt or failure
 ```
+
+Read from top to bottom. **Sites is where you compose; AWS waits and sends; LINE
+receives the message.** The browser is only needed when scheduling or checking
+status. A receipt means LINE accepted the message, not that the recipient read it.
+
+Inside AWS, Lambda runs the code, EventBridge supplies the timer, DynamoDB stores
+jobs and the encrypted session, and S3 temporarily holds attachments. These are
+parts of the same cloud backend—not additional apps you need to keep open.
 
 ## Two repositories
 
