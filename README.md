@@ -8,24 +8,29 @@ So I built one: a private front end on **ChatGPT Sites**, with a small **AWS ser
 
 - Send now or schedule for later, with an explicit time zone.
 - Drag and drop images, text files, or other documents: up to five files, 20 MiB each.
-- Send text and each attachment as separate messages; cancel pending jobs and review receipts.
+- Send text and each attachment as separate messages; cancel pending sends and review receipts.
 - Require LINE Letter Sealing. No silent downgrade and no automatic resend after an uncertain outcome.
 
 Images arrive as **file attachments**, not native photo bubbles. Native image sending is disabled because of an encryption flaw in the inherited format. Message order within a batch is not guaranteed.
 
-## Where everything lives
+## How a scheduled message gets sent
 
-| Component | Job |
-| --- | --- |
-| **ChatGPT Sites** | Private interface, ChatGPT sign-in, and a server-side API relay |
-| **AWS Lambda** | Scheduling API and the Go LINE sender, running only when invoked |
-| **EventBridge Scheduler** | Wakes the sender at the chosen time |
-| **DynamoDB** | Jobs, receipts, and a separately encrypted LINE session |
-| **Private S3** | Temporary attachment storage, pinned to immutable versions |
+You choose the message and time. **AWS remembers the schedule and sends through
+your LINE account, even after you close the browser.**
+
+[![Choose a message in the private Site; AWS saves it, waits for the selected time, and sends it to your existing LINE chat.](docs/scheduled-send.svg)](docs/scheduled-send.svg)
+
+Two separate AWS functions do the work: the **schedule manager** saves your
+request; the **LINE sender** runs when the timer calls it. Neither function stays
+running while it waits. EventBridge Scheduler keeps the timer.
 
 **Login and reconnect happen in the private Site.** Choose Connect/Reconnect LINE, scan the QR using LINE on your phone, and approve. AWS securely saves the session; Sites never receives the LINE credentials. Your laptop can be off after setup.
 
-The [architecture guide](docs/ARCHITECTURE.md) explains the three logins, temporary QR flow, session storage, timing, and recovery. GitHub contains the source and deployment instructions; the running copies live on Sites and AWS.
+The [architecture guide](docs/ARCHITECTURE.md) follows one message, shows
+[what runs where](docs/ARCHITECTURE.md#what-runs-where), and explains login,
+uploads, and recovery. A [step-through HTML version](docs/architecture.html) is
+also included: download it and open it in a browser; GitHub shows its source.
+GitHub holds the source and deployment instructions; the running copies live on Sites and AWS.
 
 ## Build your own
 

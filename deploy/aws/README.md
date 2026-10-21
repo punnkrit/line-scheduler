@@ -159,7 +159,11 @@ can make the retained ciphertext unusable.
 
 ## Frontend and login map
 
-The sanitized frontend is in [web/](../../web/README.md). Read the [architecture guide](../../docs/ARCHITECTURE.md) for the ChatGPT/AWS/LINE login distinction, file retention, and the separate-message attachment model. The current QR bootstrap is local; AWS retains and refreshes the encrypted session afterward.
+The sanitized frontend is in [web/](../../web/README.md). Start with
+[one scheduled message](../../docs/ARCHITECTURE.md#follow-one-scheduled-message)
+or [the hosting map](../../docs/ARCHITECTURE.md#what-runs-where), then read the
+login, file retention, and attachment details. Routine LINE login and reconnect
+happen through the private Site; the local bootstrap tools are optional.
 
 ## Browser QR login and reconnect
 

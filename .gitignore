@@ -11,3 +11,6 @@ __pycache__/
 node_modules
 *.tsbuildinfo
 .DS_Store
+
+# Local documentation render checks
+/docs/architecture.sheet*.png

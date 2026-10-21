@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1140" height="426" viewBox="0 0 1140 426" role="img" aria-labelledby="title desc">
+  <title id="title">AWS sends the message after your browser closes</title>
+  <desc id="desc">Choose a message in the private Site. Through the Sites relay, the AWS schedule manager saves the message and sets an EventBridge timer. Your browser can close once Scheduled is confirmed. When due, EventBridge starts the separate LINE sender, which sends through your personal account to the selected chat. This is the normal accepted-schedule path; timing and failure details are in the architecture guide.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0 10 5 0 10Z" fill="#24645b"/></marker>
+    <style>
+      text{font-family:'Segoe UI',sans-serif;fill:#20352f}.title{font-family:Georgia,serif;font-size:30px}.tag{font-size:13px;letter-spacing:1.4px;font-weight:700;fill:#52675f}.name{font-size:19px;font-weight:650}.sub{font-size:15px;fill:#52675f}.verb{font-size:14px;fill:#24645b;text-anchor:middle}.edge{fill:none;stroke:#24645b;stroke-width:2;marker-end:url(#arrow)}.box{fill:#fff;stroke:#8c9e96;stroke-width:1.5}.boundary{fill:none;stroke:#8c9e96;stroke-dasharray:5 5}
+    </style>
+  </defs>
+  <rect width="1140" height="426" fill="#f8faf7"/>
+  <text x="32" y="51" class="title">AWS sends the message after your browser closes.</text>
+  <text x="32" y="81" class="sub">Example: send “Hello” to your selected chat tomorrow at 9 AM.</text>
+  <path d="M32 126H432M472 126H656M696 126H1100" stroke="#8c9e96"/>
+  <text x="32" y="116" class="tag">NOW · YOU SET IT UP</text>
+  <text x="472" y="116" class="tag">AWS WAITS</text>
+  <text x="696" y="116" class="tag">LATER · AWS SENDS</text>
+  <rect x="236" y="151" width="660" height="164" rx="4" class="boundary"/>
+  <text x="252" y="177" class="tag">YOUR AWS ACCOUNT</text>
+  <path d="M216 242H252M436 242H472M656 242H692M876 242H912" class="edge"/>
+  <text x="234" y="215" class="verb">asks</text>
+  <text x="454" y="215" class="verb">sets</text>
+  <text x="674" y="215" class="verb">starts</text>
+  <text x="894" y="215" class="verb">sends</text>
+  <rect x="32" y="195" width="184" height="98" rx="4" class="box"/>
+  <text x="48" y="226" class="name">Choose message</text>
+  <text x="48" y="253" class="sub">Browser interface</text>
+  <text x="48" y="276" class="sub">via the Sites relay</text>
+  <rect x="252" y="195" width="184" height="98" rx="4" class="box"/>
+  <text x="268" y="226" class="name">Save schedule</text>
+  <text x="268" y="253" class="sub">Schedule manager</text>
+  <text x="268" y="276" class="sub">API Lambda</text>
+  <rect x="472" y="195" width="184" height="98" rx="4" fill="#e6f1eb" stroke="#24645b" stroke-width="2"/>
+  <text x="488" y="226" class="name">Wait until due</text>
+  <text x="488" y="253" class="sub">Send timer</text>
+  <text x="488" y="276" class="sub">EventBridge</text>
+  <rect x="692" y="195" width="184" height="98" rx="4" class="box"/>
+  <text x="708" y="226" class="name">Send message</text>
+  <text x="708" y="253" class="sub">LINE sender</text>
+  <text x="708" y="276" class="sub">Worker Lambda</text>
+  <rect x="912" y="195" width="184" height="98" rx="4" class="box"/>
+  <text x="928" y="226" class="name">Your LINE chat</text>
+  <text x="928" y="253" class="sub">From your personal</text>
+  <text x="928" y="276" class="sub">LINE account</text>
+  <path d="M344 315V345H48" fill="none" stroke="#8c9e96"/>
+  <text x="48" y="371" class="name">Once the Site confirms “Scheduled,” you can close it.</text>
+  <text x="48" y="398" class="sub">EventBridge keeps the timer. Neither Lambda needs to stay running.</text>
+</svg>

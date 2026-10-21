@@ -1,132 +1,55 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1360" height="1160" viewBox="0 0 1360 1160" role="img" aria-labelledby="title desc">
-  <title id="title">LINE Scheduler: what runs where</title>
-  <desc id="desc">The browser displays the interface hosted by Sites. Sites has a private server relay that calls the AWS API. Within AWS, an API Lambda saves jobs and creates EventBridge timers. A timer invokes the worker Lambda, which runs the LINE client using an encrypted session and sends to LINE. AWS stores jobs in DynamoDB, the encrypted session in a separate DynamoDB table, and files in S3. The browser uploads files directly to S3 with temporary permission. Login and conversation refresh invoke the worker without a timer. GitHub supplies source code for deployment and is not involved in scheduled delivery.</desc>
+<svg xmlns="http://www.w3.org/2000/svg" width="1140" height="654" viewBox="0 0 1140 654" role="img" aria-labelledby="title desc">
+  <title id="title">Sites hosts the control panel; AWS runs the sender</title>
+  <desc id="desc">The browser loads the private Sites interface. The Sites server relay forwards authenticated requests to the schedule manager, one Lambda in your AWS account. It creates an EventBridge timer. When due, that timer starts a separate LINE sender Lambda, which connects to LINE. Messages, results, the encrypted LINE session, and attachments persist in AWS storage. Storage access and login paths are described separately in the architecture guide.</desc>
   <defs>
-    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10Z" fill="#40546a"/></marker>
-    <marker id="reverse" viewBox="0 0 10 10" refX="1" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M10 0L0 5L10 10Z" fill="#40546a"/></marker>
-    <marker id="purple" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10Z" fill="#7856a1"/></marker>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0 10 5 0 10Z" fill="#24645b"/></marker>
     <style>
-      text { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; fill: #192d42; }
-      .title { font-size: 34px; font-weight: 700; }
-      .domain { font-size: 26px; font-weight: 700; }
-      .name { font-size: 21px; font-weight: 700; }
-      .body { font-size: 18px; }
-      .small { font-size: 16px; fill: #40546a; }
-      .label { font-size: 16px; font-weight: 600; }
-      .eyebrow { font-size: 14px; font-weight: 700; letter-spacing: 1.3px; fill: #40546a; }
-      .edge { fill: none; stroke: #40546a; stroke-width: 2; marker-end: url(#arrow); }
-      .two-way { marker-start: url(#reverse); }
-      .special { fill: none; stroke: #7856a1; stroke-width: 2; stroke-dasharray: 7 5; marker-end: url(#purple); }
-      .node { fill: #fff; stroke: #b8c6d2; stroke-width: 1.5; }
+      text{font-family:'Segoe UI',sans-serif;fill:#20352f}.title{font-family:Georgia,serif;font-size:30px}.tag{font-size:13px;letter-spacing:1.4px;font-weight:700;fill:#52675f}.name{font-size:23px;font-weight:650}.sub{font-size:17px;fill:#52675f}.verb{font-size:15px;fill:#24645b}.edge{fill:none;stroke:#24645b;stroke-width:2;marker-end:url(#arrow)}.box{fill:#fff;stroke:#8c9e96;stroke-width:1.5}.boundary{fill:none;stroke:#8c9e96;stroke-dasharray:5 5}
     </style>
   </defs>
-  <rect width="1360" height="1160" fill="#f8fafc"/>
-  <text x="40" y="55" class="title">What runs where?</text>
-  <text x="40" y="88" class="body">Sites is the control panel. AWS holds the schedule and runs the LINE client.</text>
-
-  <!-- The user's device and the two hosted services are distinct boundaries. -->
-  <rect x="40" y="135" width="320" height="210" rx="14" fill="#edf2f7" stroke="#bac8d6"/>
-  <text x="62" y="167" class="eyebrow">YOUR DEVICE</text>
-  <text x="62" y="200" class="domain">Browser</text>
-  <text x="62" y="234" class="body">Displays the Sites interface</text>
-  <text x="62" y="263" class="body">Compose · schedule · history</text>
-  <text x="62" y="306" class="small">Can close after a schedule is saved.</text>
-
-  <rect x="480" y="135" width="330" height="210" rx="14" fill="#e9f3fc" stroke="#9abbd7"/>
-  <text x="502" y="167" class="eyebrow">OPENAI SITES · CLOUD</text>
-  <text x="502" y="200" class="domain">Private website</text>
-  <text x="502" y="234" class="body">Hosts the frontend files</text>
-  <text x="502" y="263" class="body">Runs a server-side API relay</text>
-  <text x="502" y="306" class="small">ChatGPT sign-in controls access.</text>
-  <path d="M360 236H480" class="edge two-way"/>
-  <text x="420" y="212" text-anchor="middle" class="label">HTTPS</text>
-
-  <rect x="1030" y="135" width="290" height="210" rx="14" fill="#eaf5ed" stroke="#9dbfa7"/>
-  <text x="1052" y="167" class="eyebrow">LINE · EXTERNAL SERVICE</text>
-  <text x="1052" y="200" class="domain">Your LINE account</text>
-  <text x="1052" y="234" class="body">Delivers to existing chats</text>
-  <text x="1052" y="263" class="body">Approves login on your phone</text>
-  <text x="1052" y="306" class="small">Existing chats · no Official Account</text>
-
-  <!-- AWS: a boundary around code, timer and durable storage. -->
-  <rect x="450" y="410" width="870" height="540" rx="16" fill="#fff4e5" stroke="#d7b585" stroke-width="1.5"/>
-  <text x="740" y="447" class="domain">Your AWS account</text>
-  <path d="M590 345V480" class="edge two-way"/>
-  <rect x="602" y="364" width="202" height="26" fill="#f8fafc"/>
-  <text x="611" y="383" class="label">Authenticated API calls</text>
-
-  <rect x="480" y="480" width="230" height="158" rx="10" class="node"/>
-  <text x="500" y="510" class="eyebrow">LAMBDA FUNCTION 1</text>
-  <text x="500" y="544" class="name">API / controller</text>
-  <text x="500" y="575" class="body">Save or cancel jobs</text>
-  <text x="500" y="603" class="body">Status + QR progress</text>
-
-  <rect x="770" y="480" width="220" height="158" rx="10" class="node"/>
-  <text x="790" y="510" class="eyebrow">EVENTBRIDGE</text>
-  <text x="790" y="544" class="name">Timer / scheduler</text>
-  <text x="790" y="575" class="body">Waits for the due time</text>
-  <text x="790" y="603" class="body">Invokes the worker</text>
-
-  <rect x="1050" y="480" width="240" height="158" rx="10" class="node"/>
-  <text x="1070" y="510" class="eyebrow">LAMBDA FUNCTION 2</text>
-  <text x="1070" y="544" class="name">Worker</text>
-  <text x="1070" y="575" class="body">Runs the Go LINE client</text>
-  <text x="1070" y="603" class="body">Send · login · refresh</text>
-
-  <path d="M710 553H770" class="edge"/>
-  <path d="M990 553H1050" class="edge"/>
-  <path d="M1170 480V345" class="edge two-way"/>
-  <text x="1185" y="363" class="label">Send / login</text>
-  <text x="1185" y="384" class="small">Letter Sealing</text>
-  <text x="1185" y="404" class="small">for messages</text>
-
-  <!-- Immediate actions bypass the clock. -->
-  <path d="M660 638V676H1190V638" class="special"/>
-  <rect x="740" y="662" width="362" height="26" fill="#fff4e5"/>
-  <text x="921" y="681" text-anchor="middle" class="label">Login / refresh / send now: no timer</text>
-
-  <!-- Storage is deliberately grouped instead of drawing every read/write edge. -->
-  <path d="M525 638V744" class="edge two-way"/>
-  <path d="M1245 638V744" class="edge two-way"/>
-  <text x="540" y="721" class="small">Read / write</text>
-  <text x="1230" y="721" text-anchor="end" class="small">Read / write</text>
-  <rect x="480" y="744" width="810" height="150" rx="10" fill="#fff" stroke="#b8c6d2"/>
-  <path d="M750 762V876M1020 762V876" stroke="#d4dde4"/>
-  <text x="500" y="776" class="eyebrow">DYNAMODB · JOBS</text>
-  <text x="500" y="808" class="name">Messages &amp; results</text>
-  <text x="500" y="838" class="small">Recipient, time, text, receipt</text>
-  <text x="500" y="864" class="small">Also coordinates safe execution</text>
-  <text x="770" y="776" class="eyebrow">DYNAMODB · SESSION</text>
-  <text x="770" y="808" class="name">Encrypted LINE login</text>
-  <text x="770" y="838" class="small">Tokens, keys, session state</text>
-  <text x="770" y="864" class="small">Only the worker can decrypt it</text>
-  <text x="1040" y="776" class="eyebrow">S3 · PRIVATE FILES</text>
-  <text x="1040" y="808" class="name">Attachments</text>
-  <text x="1040" y="838" class="small">Versioned files + integrity checks</text>
-  <text x="1040" y="864" class="small">Browser uploads directly here</text>
-  <text x="480" y="925" class="small">Storage arrows summarize access; the API cannot read or decrypt the LINE session.</text>
-
-  <!-- Learning notes explain the boundaries without adding crossing edges. -->
-  <text x="40" y="448" class="eyebrow">HOW TO READ THIS MAP</text>
-  <text x="40" y="486" class="name">Lambda means “run this code.”</text>
-  <text x="40" y="517" class="body">The API and worker are two separate</text>
-  <text x="40" y="545" class="body">functions. Neither waits all day.</text>
-  <text x="40" y="573" class="body">EventBridge does the waiting.</text>
-  <path d="M40 603H365" stroke="#d0dae4"/>
-  <text x="40" y="638" class="name">Files take a shortcut.</text>
-  <text x="40" y="669" class="body">The API grants short-lived upload</text>
-  <text x="40" y="697" class="body">permission. File bytes travel directly</text>
-  <text x="40" y="725" class="body">from your browser to private S3.</text>
-  <path d="M40 755H365" stroke="#d0dae4"/>
-  <text x="40" y="790" class="name">The login stays in AWS.</text>
-  <text x="40" y="821" class="body">Sites shows the QR and progress.</text>
-  <text x="40" y="849" class="body">Your phone approves; the AWS worker</text>
-  <text x="40" y="877" class="body">saves and reuses the encrypted login.</text>
-  <text x="40" y="923" class="small">No AI agent runs scheduled sends.</text>
-
-  <path d="M40 987H1320" stroke="#c3cfda"/>
-  <text x="40" y="1020" class="eyebrow">SETUP &amp; UPDATES ONLY</text>
-  <text x="40" y="1055" class="name">GitHub source is deployed to Sites and AWS</text>
-  <text x="40" y="1087" class="body">The repo contains the application code and setup instructions. Deployed copies run in the cloud.</text>
-  <text x="40" y="1116" class="small">GitHub and your setup laptop are not in the delivery path. AWS also uses IAM permissions, logs and a failure queue (omitted above).</text>
+  <rect width="1140" height="654" fill="#f8faf7"/>
+  <text x="32" y="51" class="title">Sites hosts the control panel. AWS runs the sender.</text>
+  <text x="32" y="81" class="sub">Hosting boundaries — read the scheduled-send figure for the order of events.</text>
+  <text x="32" y="126" class="tag">YOUR DEVICE</text>
+  <rect x="32" y="145" width="264" height="132" rx="4" class="box"/>
+  <text x="52" y="182" class="name">Browser</text>
+  <text x="52" y="215" class="sub">Compose and schedule;</text>
+  <text x="52" y="241" class="sub">view progress and history.</text>
+  <text x="400" y="126" class="tag">CHATGPT SITES · CLOUD</text>
+  <rect x="400" y="145" width="304" height="132" rx="4" class="box"/>
+  <text x="420" y="182" class="name">Private website</text>
+  <text x="420" y="215" class="sub">Hosts the interface and</text>
+  <text x="420" y="241" class="sub">an authenticated server relay.</text>
+  <text x="840" y="126" class="tag">LINE · EXTERNAL SERVICE</text>
+  <rect x="840" y="145" width="268" height="132" rx="4" class="box"/>
+  <text x="860" y="182" class="name">Your LINE account</text>
+  <text x="860" y="215" class="sub">Delivers messages to</text>
+  <text x="860" y="241" class="sub">your existing chats.</text>
+  <path d="M296 213H400" class="edge"/>
+  <text x="308" y="190" class="verb">loads UI</text>
+  <rect x="32" y="358" width="1076" height="264" rx="4" class="boundary"/>
+  <text x="52" y="387" class="tag">YOUR AWS ACCOUNT</text>
+  <path d="M552 277V316H204V421" class="edge"/>
+  <text x="220" y="306" class="verb">relay forwards requests</text>
+  <path d="M972 421V277" class="edge"/>
+  <text x="984" y="326" class="verb">sends</text>
+  <text x="984" y="348" class="verb">through LINE</text>
+  <path d="M336 477H440M680 477H800" class="edge"/>
+  <text x="351" y="456" class="verb">sets timer</text>
+  <text x="694" y="456" class="verb">starts sender</text>
+  <rect x="72" y="421" width="264" height="111" rx="4" class="box"/>
+  <text x="92" y="454" class="name">Schedule manager</text>
+  <text x="92" y="484" class="sub">API Lambda</text>
+  <text x="92" y="511" class="sub">Schedules or cancels sends.</text>
+  <rect x="440" y="421" width="240" height="111" rx="4" fill="#e6f1eb" stroke="#24645b" stroke-width="2"/>
+  <text x="460" y="454" class="name">Send timer</text>
+  <text x="460" y="484" class="sub">EventBridge Scheduler</text>
+  <text x="460" y="511" class="sub">Waits until the due time.</text>
+  <rect x="800" y="421" width="268" height="111" rx="4" class="box"/>
+  <text x="820" y="454" class="name">LINE sender</text>
+  <text x="820" y="484" class="sub">Worker Lambda + Go client</text>
+  <text x="820" y="511" class="sub">Logs in and sends messages.</text>
+  <path d="M72 557H1068" stroke="#cbd6cf"/>
+  <text x="72" y="584" class="sub">Also stored in AWS: messages and results · encrypted LINE login · private attachments.</text>
+  <text x="72" y="607" class="tag">STORAGE ACCESS AND LOGIN FLOWS ARE EXPLAINED SEPARATELY.</text>
 </svg>

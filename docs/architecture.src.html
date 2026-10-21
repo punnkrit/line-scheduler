@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en" data-register="blueprint">
+<head>
+<title>LINE Scheduler: follow one message</title>
+<link rel="stylesheet" href="kit.css" data-ve-kit>
+<style>
+:root { --accent: #24645b; }
+header { max-width: none; }
+header h1 { max-width: none; font-size: clamp(2rem, 3.4vw, 3.1rem); }
+.phase-key { display: flex; flex-wrap: wrap; gap: var(--s-5); padding-top: var(--s-3); color: var(--text-dim); font-size: var(--t-small); }
+.phase-key b { color: var(--text); }
+.diagram-image { display: block; width: 100%; height: auto; min-width: 720px; }
+.static-frame { background: #f8faf7; }
+details { margin-block: var(--s-4); padding: var(--s-4); border: 1px solid var(--border-bright); border-radius: var(--r-2); }
+summary { cursor: pointer; font-weight: 600; }
+details > p { margin-top: var(--s-3); }
+.sources p { max-width: 75ch; }
+a { overflow-wrap: anywhere; }
+</style>
+</head>
+<body>
+<main>
+<header>
+<p class="eyebrow">LINE Scheduler · Architecture</p>
+<h1>Your browser can close.<br>AWS keeps the schedule.</h1>
+<p class="lead">Follow one example: send “Hello” to your selected LINE chat tomorrow at 9 AM, in your chosen time zone.</p>
+</header>
+<figure class="ve-steps" id="scheduled-send">
+<div class="frame"><svg class="ve-svg" viewBox="0 0 960 390" aria-label="AWS saves your message and timer now; when due the timer starts the LINE sender, which sends and records a result.">
+<text x="30" y="27" class="ve-bnd-t">NOW · SAVE THE SCHEDULE</text>
+<text x="30" y="227" class="ve-bnd-t">WHEN DUE · SEND AND RECORD THE RESULT</text>
+<path class="ve-e" data-s="0 2" d="M250 90H340"/>
+<text class="ve-el" x="295" y="72">requests</text>
+<path class="ve-e" data-s="0 2" d="M580 90H670"/>
+<text class="ve-el" x="625" y="72">sets</text>
+<path class="ve-e is-async" data-s="0 4" d="M790 130V190H460V260"/>
+<text class="ve-el" x="625" y="177">starts when due</text>
+<path class="ve-e" data-s="0 4" d="M580 300H670"/>
+<text class="ve-el" x="625" y="282">sends</text>
+<path class="ve-e" data-s="0 5" d="M340 300H250"/>
+<text class="ve-el" x="295" y="282">records</text>
+<g class="ve-n" data-s="0 1"><rect class="sh" x="30" y="50" width="220" height="80"/><text x="140" y="77">Your request</text><text class="sub" x="140" y="105">Browser + Sites relay</text></g>
+<g class="ve-n" data-s="0 2"><rect class="sh" x="340" y="50" width="240" height="80"/><text x="460" y="77">Schedule manager</text><text class="sub" x="460" y="105">API Lambda</text></g>
+<g class="ve-n is-key" data-s="0 2 3"><rect class="sh" x="670" y="50" width="240" height="80"/><text x="790" y="77">Send timer</text><text class="sub" x="790" y="105">EventBridge Scheduler</text></g>
+<g class="ve-n" data-s="0 4 5"><rect class="sh" x="340" y="260" width="240" height="80"/><text x="460" y="287">LINE sender</text><text class="sub" x="460" y="315">Worker Lambda + Go</text></g>
+<g class="ve-n" data-s="0 4"><rect class="sh" x="670" y="260" width="240" height="80"/><text x="790" y="287">LINE chat</text><text class="sub" x="790" y="315">Your personal account</text></g>
+<g class="ve-n" data-s="0 5"><path class="sh" d="M30 276C30 258 250 258 250 276V330C250 348 30 348 30 330Z"/><ellipse class="sh lid" cx="140" cy="276" rx="110" ry="14"/><text x="140" y="307">Saved result</text><text class="sub" x="140" y="330">DynamoDB jobs table</text></g>
+</svg></div>
+<div class="ve-player">
+<ol class="ve-cap" aria-live="polite">
+<li data-n="1/5">Choose the chat, message, and time in your private Site.</li>
+<li data-n="2/5">The schedule manager saves the message in DynamoDB and sets an EventBridge timer.</li>
+<li data-n="3/5">Once “Scheduled” is confirmed, close the browser. EventBridge waits; neither Lambda needs to stay running.</li>
+<li data-n="4/5">When due, EventBridge starts the LINE sender. It claims the saved send and uses your encrypted LINE login to send.</li>
+<li data-n="5/5">The sender saves the result. Reopen the Site to read it through the schedule manager. “Sent” means LINE accepted it.</li>
+</ol>
+<button type="button" data-go="-1" aria-label="Previous step">←</button>
+<button type="button" data-play aria-label="Play the scheduled-send explanation">Play</button>
+<input type="range" min="1" max="5" value="5" aria-label="Scheduled-send step">
+<button type="button" data-go="1" aria-label="Next step">→</button>
+</div>
+<figcaption><span class="fig-n">Fig. 1</span>AWS carries out an accepted schedule without your browser. Use Play or the step controls to follow the flow.</figcaption>
+</figure>
+<div class="phase-key"><span><b>Now:</b> save the message and timer</span><span><b>While away:</b> EventBridge waits</span><span><b>When due:</b> AWS calls the sender</span></div>
+<section id="hosting">
+<div class="sec-head"><p class="ve-label caps">Hosting</p><h2>Sites hosts the controls. AWS runs the sender.</h2></div>
+<figure>
+<div class="frame static-frame"><img class="diagram-image" src="architecture.svg" width="1140" height="654" alt="The browser loads Sites. Its relay calls the AWS schedule manager; EventBridge starts a separate LINE sender that connects to LINE."></div>
+<figcaption><span class="fig-n">Fig. 2</span>The schedule manager and LINE sender are separate Lambda functions: each runs only when called.</figcaption>
+</figure>
+<p>GitHub supplies the code at deployment time. Your laptop and GitHub are outside the delivery path.</p>
+</section>
+<section id="details">
+<div class="sec-head"><p class="ve-label caps">Separate flows</p><h2>Login and uploads happen before delivery.</h2></div>
+<details open>
+<summary>How does LINE login work?</summary>
+<figure>
+<ve-flow label="The private Site asks the AWS LINE sender to start login. The sender requests a QR from LINE; you approve it on your phone. AWS saves the encrypted LINE login.">
+<ve-node id="site" at="1 1" sub="Relay to API">Private Site</ve-node>
+<ve-node id="login-sender" at="2 1" sub="Worker Lambda">Sender</ve-node>
+<ve-node id="phone" at="3 1" sub="Phone approval">LINE</ve-node>
+<ve-node id="session" at="2 2" shape="db" sub="Encrypted in AWS">LINE login</ve-node>
+<ve-edge from="site" to="login-sender" label="starts login"/>
+<ve-edge from="login-sender" to="phone" label="requests QR"/>
+<ve-edge from="login-sender" to="session" label="saves login"/>
+</ve-flow>
+<figcaption><span class="fig-n">Fig. 3</span>The Site displays the QR; you approve on your phone, and the AWS sender saves the encrypted login.</figcaption>
+</figure>
+<p>Only the sender can read the session table and decrypt the LINE login. Sites holds neither the saved session nor its key. Login and reconnect use no send timer.</p>
+</details>
+<details open>
+<summary>Where do attachments go?</summary>
+<figure>
+<div class="frame static-frame"><img class="diagram-image" src="file-upload.svg" width="1140" height="470" alt="The browser obtains upload permission via Sites, then uploads bytes directly to S3. The schedule manager pins the version; the sender later reads and checks it."></div>
+<figcaption><span class="fig-n">Fig. 4</span>The upload bypasses Sites and the schedule manager; the sender later reads the exact scheduled file version.</figcaption>
+</figure>
+<p>The browser hashes the file; the sender checks size and hash before sending. Text and each attachment are separate LINE messages, each with its own saved send. Their arrival order is not guaranteed. Images arrive as file attachments.</p>
+</details>
+<details>
+<summary>What does “job” mean? Can I cancel or retry?</summary>
+<p>A job is one saved LINE message with its recipient, due time, and delivery status. “Cancel send” stops a pending message before the sender claims it.</p>
+<p>Scheduling has minute-level precision. A send more than 15 minutes late expires. An uncertain result becomes “Check LINE” and is never automatically resent. If the scheduling response is uncertain, refresh history before creating another request.</p>
+</details>
+</section>
+<section class="sources" aria-label="Sources">
+<p class="ve-label caps">Source code and full guide</p>
+<p><a href="https://github.com/punnkrit/line-scheduler/blob/main/docs/ARCHITECTURE.md">Architecture guide: storage, security, timing, and recovery</a></p>
+<p><a href="https://github.com/punnkrit/line-scheduler/blob/main/web/app/scheduler.tsx">Browser composer</a> · <a href="https://github.com/punnkrit/line-scheduler/blob/main/web/app/api/scheduler/route.ts">Sites relay</a> · <a href="https://github.com/punnkrit/line-scheduler/blob/main/deploy/aws/handler.py">Schedule manager and LINE sender</a> · <a href="https://github.com/punnkrit/line-scheduler/blob/main/deploy/aws/cloud_login.py">QR login</a> · <a href="https://github.com/punnkrit/line-scheduler/blob/main/deploy/aws/template.py">AWS resources</a></p>
+<p>This walkthrough is an illustration of the normal accepted-schedule path. It does not contact LINE or run a scheduled send.</p>
+</section>
+</main>
+</body>
+</html>

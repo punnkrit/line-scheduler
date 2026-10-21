@@ -1,50 +1,81 @@
-# What runs where?
+# LINE Scheduler architecture
 
-**Sites is the control panel. AWS holds the schedule and runs the LINE client.**
-After a schedule is accepted, your browser and laptop can close.
+**You choose a message and a time. AWS remembers the schedule and sends through
+your LINE account.** Your browser and laptop can close after the schedule is accepted.
 
-[![Architecture map showing the browser, private Sites hosting and server relay, AWS API and worker Lambdas, EventBridge timer, DynamoDB storage, S3 attachments, and LINE.](architecture.svg)](architecture.svg)
+Start with [one scheduled message](#follow-one-scheduled-message), then look at
+[what runs where](#what-runs-where). [LINE login](#line-sign-in-and-reconnect) and
+[file uploads](#sending-text-and-files) each have their own explanation.
 
-The boxes show **where code and data live**; the arrows show communication, not
-a timeline. Open the image for a larger view. The login sequence below describes
-the order of events during reconnect.
+Prefer to step through the flow? Download [the standalone HTML version](architecture.html)
+and open it in a browser. GitHub displays HTML source rather than running it.
 
-### Read the architecture in four parts
+## Follow one scheduled message
 
-1. **Your browser displays the interface.** Sites hosts its frontend files. When
-   you open the Site, that frontend runs in your browser: it collects your message,
-   selected chat, files, and time, and displays progress and history. An unsaved
-   draft only lives in browser memory.
-2. **Sites also runs a server-side relay.** ChatGPT sign-in protects the private
-   Site. The relay forwards authorized requests to AWS using a server-only bridge
-   secret. It does not store your LINE session or keep the send timer running.
-3. **AWS is the backend, with two separate Lambda functions.** The **API Lambda**
-   saves jobs and creates EventBridge schedules. **EventBridge Scheduler** waits
-   until a job is due, then invokes the **worker Lambda**. The worker runs the
-   bundled Go LINE client, restores the encrypted session, and sends the message.
-   Lambda means code that runs when invoked; it is not a desktop or a VM left on
-   all day. Login, conversation refresh, and immediate sends invoke the worker
-   without waiting for a timer.
-4. **AWS storage outlives each invocation.** DynamoDB holds jobs/results and a
-   separate encrypted LINE session record. S3 holds private attachments. The API
-   grants temporary upload permission, then file bytes go directly from the
-   browser to S3. The worker reads the pinned file version when sending. The
-   storage arrows summarize access: the API has no access to the session table
-   or the session decryption key.
+For example: **send “Hello” to a selected LINE chat tomorrow at 9 AM** in the time zone you choose.
 
-**A scheduled send follows:** browser → Sites relay → API → EventBridge → worker
-→ LINE. The API saves the job before creating the timer; the worker records the
-result. Opening history reads that stored result through the API and relay. LINE's
-receipt means it accepted the message, not that the recipient read it.
+[![The browser submits a message; the AWS schedule manager saves it, EventBridge waits, and the LINE sender sends to the selected chat.](scheduled-send.svg)](scheduled-send.svg)
 
-**A reconnect follows:** browser → Sites relay → API → worker ↔ LINE. The worker
-starts the login, Sites displays the temporary QR, and you approve on your phone.
-The worker saves the encrypted session in AWS. No laptop process or terminal
-tunnel participates. See the sequence below for the full exchange.
+1. **Now: choose the chat, message, and time.** The browser sends your request
+   through the private Sites relay to the AWS **schedule manager**.
+2. **Now: save the message and set the timer.** The schedule manager stores the
+   message, recipient, and due time in DynamoDB, then creates an EventBridge schedule.
+   Wait for the Site to confirm **Scheduled** before closing it. If the response is
+   uncertain, refresh history to check the existing request.
+3. **While you are away: AWS waits.** EventBridge holds the timer. The browser,
+   schedule manager, and LINE sender do not need to keep running.
+4. **When due: send through LINE.** EventBridge starts the **LINE sender**. It
+   reads the saved message, claims the send, and runs the Go LINE client using
+   the encrypted LINE login, with Letter Sealing required.
+5. **Later: check history.** The sender stores the result in DynamoDB. When you
+   reopen the Site, the schedule manager returns that result through the relay.
+   A receipt means LINE accepted the message, not that the recipient read it.
 
-IAM permissions, CloudWatch logs, and the SQS failure queue support the backend;
-they are omitted from the map to keep the main relationships readable. There is
-no AI agent deciding when or what to send.
+The code calls each saved send a **job**: one LINE message, its recipient, due
+time, and delivery status. **Cancel send** cancels a pending message before the
+sender claims it; it cannot recall a message already being sent.
+
+## What runs where?
+
+**Sites hosts the control panel. Your AWS account holds the schedule, files,
+and LINE login.** The map shows hosting boundaries; the previous figure shows order.
+
+[![The browser loads the private Sites interface. Its server relay calls the schedule manager in AWS. EventBridge starts a separate LINE sender, which connects to LINE.](architecture.svg)](architecture.svg)
+
+| Name used here | Implementation | Responsibility |
+| --- | --- | --- |
+| Browser interface | React, served by Sites | Collects the message and time; displays QR, progress, and history |
+| Sites relay | Server-side `/api/scheduler` route | Checks ChatGPT sign-in and forwards requests with a server-only secret |
+| Schedule manager | API Lambda, `handler.controller` | Schedules or cancels pending messages; returns history and login progress |
+| Send timer | EventBridge Scheduler | Starts the LINE sender when the message is due |
+| LINE sender | Worker Lambda, `handler.worker`, plus Go `cloudline` | Connects to LINE, sends messages, and stores results |
+
+**Lambda means a function that runs when called.** The schedule manager and LINE
+sender are two separate functions; EventBridge does the waiting between calls.
+**Send now**, **Refresh conversations**, and **Connect/Reconnect LINE** call the
+sender through the schedule manager without creating a timer.
+
+### What survives when a function stops?
+
+- **Messages and results:** the DynamoDB jobs table stores scheduled sends and history.
+- **LINE login:** a separate DynamoDB session table stores encrypted tokens and keys.
+  Only the LINE sender has access to this table and its decryption key.
+- **Attachments:** a private S3 bucket stores the files. Uploads go directly from
+  the browser to S3; the sender reads the exact saved version when it sends.
+- **Unsaved drafts:** browser memory only. Refreshing or closing the page loses them.
+
+GitHub and your setup computer supply code during deployment; neither participates
+in delivery. IAM permissions, CloudWatch logs, and an SQS failure queue support
+the backend and are omitted from these figures. No AI agent runs scheduled sends.
+
+### Find each part in the code
+
+- [Browser composer and history](../web/app/scheduler.tsx): schedule requests, direct file uploads, and displayed statuses.
+- [Sites relay](../web/app/api/scheduler/route.ts): browser authentication and calls to AWS.
+- [Schedule manager and LINE sender](../deploy/aws/handler.py): `controller`, `worker`, upload checks, and client invocation.
+- [QR login lifecycle](../deploy/aws/cloud_login.py): temporary login attempts and encrypted session replacement.
+- [AWS infrastructure](../deploy/aws/template.py): the two Lambdas, timer permissions, storage, and failure queue.
+- [Client version](../client.lock.json) and [client build](../scripts/build_sender.py): the pinned Go client bundled with the sender.
 
 ## Two repositories
 
@@ -53,7 +84,7 @@ no AI agent deciding when or what to send.
 
 `client.lock.json` pins the client repository, commit, and Go toolchain. `scripts/build_sender.py` builds that commit into ignored deployment binaries. We do not vendor the protocol source or track a moving branch at deploy time. Updating the client is a deliberate lock-file change after review and tests.
 
-## Three logins, three different jobs
+## Three logins, three different purposes
 
 | Login | What it does | Where it lives |
 | --- | --- | --- |
@@ -68,12 +99,16 @@ not cancel accepted schedules.
 
 ## LINE sign-in and reconnect
 
-After initial deployment, login and reconnect happen entirely online:
+After initial deployment, login and reconnect happen entirely online.
+
+This is a setup/reconnect flow, separate from the send timer. Here “LINE sender”
+means the worker Lambda; requests and QR progress pass through the Sites relay
+and schedule manager.
 
 ```mermaid
 sequenceDiagram
     participant Owner as Owner in private Site
-    participant AWS as AWS worker
+    participant AWS as LINE sender in AWS
     participant LINE as LINE / phone
     Owner->>AWS: Start temporary login through authenticated relay
     AWS->>LINE: Request QR login
@@ -137,6 +172,12 @@ dependency. The normal migration command refuses to overwrite an existing sessio
 
 ## Sending text and files
 
+**The browser uploads file bytes directly to S3.** The Sites relay and schedule
+manager arrange permission; they do not carry the upload. The file's saved version
+then follows the same timer-and-sender path as a text message.
+
+[![First the browser asks AWS for upload permission through Sites, then uploads directly to private S3. When due, the LINE sender reads the pinned version, checks it, and sends it.](file-upload.svg)](file-upload.svg)
+
 1. Choose a conversation, compose text and/or attach files, and select a time zone
    and date. Drag-and-drop and the file picker accept up to five files, 20 MiB each.
 2. On submission, the browser hashes each file and obtains a five-minute S3 upload
@@ -193,3 +234,21 @@ requests, logs, and service allowances still apply.
 
 See [deployment and operations](../deploy/aws/README.md) for commands and
 [security review limits](https://github.com/punnkrit/line-scheduler-client/blob/main/docs/FORK_SECURITY.md) before using a personal account.
+
+## Updating the figures
+
+The SVG files next to this guide are editable source and render directly on GitHub.
+Keep each figure focused on one question. Use the names above, with AWS service
+names as secondary labels. Keep timing and security qualifications in this guide.
+
+The optional HTML walkthrough is generated from [architecture.src.html](architecture.src.html)
+with the [visual-explainer skill](https://github.com/nicobailon/visual-explainer).
+After editing that source or an SVG, build with the installed skill's renderer.
+The helper embeds the SVGs so the generated HTML opens as a single file:
+
+```text
+python scripts/build_architecture.py --renderer <visual-explainer-directory>/kit/render.mjs
+```
+
+Keep the HTML and SVG versions consistent when the flow changes. Rendering the
+walkthrough is a documentation task; it does not deploy the app or contact LINE.

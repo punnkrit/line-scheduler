@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1140" height="470" viewBox="0 0 1140 470" role="img" aria-labelledby="title desc">
+  <title id="title">File bytes go from the browser straight to private S3</title>
+  <desc id="desc">First, the browser asks the schedule manager through Sites for temporary upload permission. It uploads the file bytes directly to private S3. The schedule manager pins that file's immutable S3 version when creating the scheduled message. When due, the LINE sender reads that exact version, checks its size and hash, and sends it through LINE. This diagram separates upload permission from file transfer.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0 10 5 0 10Z" fill="#24645b"/></marker>
+    <style>
+      text{font-family:'Segoe UI',sans-serif;fill:#20352f}.title{font-family:Georgia,serif;font-size:30px}.tag{font-size:13px;letter-spacing:1.4px;font-weight:700;fill:#52675f}.name{font-size:22px;font-weight:650}.sub{font-size:17px;fill:#52675f}.verb{font-size:16px;fill:#24645b}.edge{fill:none;stroke:#24645b;stroke-width:2;marker-end:url(#arrow)}.box{fill:#fff;stroke:#8c9e96;stroke-width:1.5}
+    </style>
+  </defs>
+  <rect width="1140" height="470" fill="#f8faf7"/>
+  <text x="32" y="51" class="title">File bytes go straight from your browser to private S3.</text>
+  <text x="32" y="81" class="sub">Permission takes one route. The actual file takes another.</text>
+  <text x="32" y="124" class="tag">NOW · UPLOAD</text>
+  <text x="832" y="124" class="tag">WHEN DUE · SEND</text>
+  <path d="M160 188V156H420V188" class="edge"/>
+  <text x="194" y="144" class="verb">1. request permission via Sites</text>
+  <path d="M420 276V307H160V276" class="edge"/>
+  <text x="193" y="333" class="verb">2. return upload permission</text>
+  <path d="M160 276V372H684V276" class="edge" stroke-width="3"/>
+  <text x="194" y="400" class="verb">3. upload file bytes directly</text>
+  <path d="M548 232H580" class="edge"/>
+  <text x="560" y="181" class="verb" text-anchor="middle">4. pin version</text>
+  <path d="M788 232H832" class="edge"/>
+  <text x="810" y="181" class="verb" text-anchor="middle">5. read version</text>
+  <rect x="32" y="188" width="256" height="88" rx="4" class="box"/>
+  <text x="52" y="221" class="name">Browser</text>
+  <text x="52" y="253" class="sub">Hashes and uploads the file.</text>
+  <rect x="316" y="188" width="232" height="88" rx="4" class="box"/>
+  <text x="336" y="221" class="name">Schedule manager</text>
+  <text x="336" y="253" class="sub">API Lambda</text>
+  <path d="M580 205C580 183 788 183 788 205V263C788 285 580 285 580 263Z" fill="#e6f1eb" stroke="#24645b" stroke-width="1.5"/>
+  <ellipse cx="684" cy="205" rx="104" ry="17" fill="#e6f1eb" stroke="#24645b" stroke-width="1.5"/>
+  <text x="600" y="241" class="name">Private S3 files</text>
+  <text x="600" y="266" class="sub">Exact saved version</text>
+  <rect x="832" y="188" width="276" height="88" rx="4" class="box"/>
+  <text x="852" y="221" class="name">LINE sender</text>
+  <text x="852" y="253" class="sub">Checks the file, then sends.</text>
+  <text x="832" y="307" class="sub">Same timer as a text message.</text>
+  <text x="32" y="447" class="sub">A later upload cannot change the version already scheduled for delivery.</text>
+</svg>
