@@ -45,9 +45,10 @@ parts of the same cloud backend—not additional apps you need to keep open.
 | AWS | Lets the operator deploy and maintain infrastructure | Temporary AWS CLI credentials; not needed for each scheduled send |
 | LINE | Lets the sender act as your personal account | Approved using the private Site QR and LINE on your phone; stored encrypted in AWS |
 
-**The Site does not log you into LINE.** Its “LINE connected” indicator reports the
-sender's last connection check. Signing into ChatGPT alone cannot establish a LINE
-session, and closing or signing out of the Site does not cancel accepted schedules.
+**ChatGPT sign-in and LINE sign-in are separate.** ChatGPT opens the private Site;
+Connect/Reconnect LINE starts the AWS-hosted QR flow. The “LINE connected” indicator
+reports the sender's last connection check. Closing or signing out of the Site does
+not cancel accepted schedules.
 
 ## LINE sign-in and reconnect
 
