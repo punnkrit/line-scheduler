@@ -63,7 +63,7 @@ def template():
             ,allow(["s3:PutObject","s3:PutObjectTagging","s3:PutObjectVersionTagging","s3:GetObject","s3:DeleteObjectVersion"],sub("${Files.Arn}/uploads/*"))
         ])}]}}
     for name in ["Worker","API"]:
-        env={"JOBS_TABLE":ref("Jobs"),"FILES_BUCKET":ref("Files")}
+        env={"JOBS_TABLE":ref("Jobs"),"FILES_BUCKET":ref("Files"),"QR_KEY":ref("QRKey")}
         if name=="Worker":env.update({"SESSION_TABLE":ref("Sessions"),"SESSION_KEY":ref("SessionKey")})
         else:env.update({"BRIDGE_TOKEN":ref("BridgeToken"),"WORKER_NAME":ref("Worker"),
             "WORKER_ARN":arn("Worker"),"SCHEDULE_GROUP":ref("Group"),
@@ -86,7 +86,7 @@ def template():
     return {"AWSTemplateFormatVersion":"2010-09-09","Description":"Private LINE scheduler with encrypted session and fenced single-attempt sends.",
       "Parameters":{"ArtifactBucket":{"Type":"String"},"ArtifactKey":{"Type":"String"},
         "SiteOrigin":{"Type":"String","AllowedPattern":"https://[A-Za-z0-9.-]+","Description":"Exact private Site origin for attachment uploads; no trailing slash"},
-        "SessionKey":{"Type":"String","NoEcho":True},"BridgeToken":{"Type":"String","NoEcho":True}},
+        "SessionKey":{"Type":"String","NoEcho":True},"QRKey":{"Type":"String","NoEcho":True},"BridgeToken":{"Type":"String","NoEcho":True}},
       "Resources":r,"Outputs":{k:{"Value":v} for k,v in {
         "APIURL":{"Fn::GetAtt":["URL","FunctionUrl"]},"APIName":ref("API"),"WorkerName":ref("Worker"),
         "JobsTable":ref("Jobs"),"SessionTable":ref("Sessions"),"FilesBucket":ref("Files"),"GroupName":ref("Group"),"Failures":ref("Failures")}.items()}}

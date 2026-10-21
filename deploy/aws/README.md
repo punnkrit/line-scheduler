@@ -160,3 +160,11 @@ can make the retained ciphertext unusable.
 ## Frontend and login map
 
 The sanitized frontend is in [web/](../../web/README.md). Read the [architecture guide](../../docs/ARCHITECTURE.md) for the ChatGPT/AWS/LINE login distinction, file retention, and the separate-message attachment model. The current QR bootstrap is local; AWS retains and refreshes the encrypted session afterward.
+
+## Browser QR login and reconnect
+
+After deployment, use Connect/Reconnect LINE in the owner-private Site. The local
+Windows migration path above is optional; routine reauthentication needs no laptop.
+The deployment creates a separate QRKey parameter for short-lived encrypted
+display events. Existing SessionKey and BridgeToken values are preserved.
+See [the login lifecycle and security boundaries](../../docs/ARCHITECTURE.md#line-sign-in-and-reconnect).

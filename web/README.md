@@ -14,7 +14,7 @@ LINE account is protected by Sites' owner-only audience, not per-user routing.
 3. Configure `SENDER_URL` and `SENDER_TOKEN` as secret server runtime variables
    through Sites. Obtain them from your own stack; never put them in source.
 4. Build and publish through the Sites workflow. Redeploy after runtime-secret changes.
-5. Complete the separate [LINE session bootstrap](../docs/ARCHITECTURE.md#line-sign-in-step-by-step).
+5. Open the deployed Site and complete [Connect LINE](../docs/ARCHITECTURE.md#line-sign-in-and-reconnect).
 
 For local development, install the locked dependencies using the Sites dependency
 helper (or `npm ci`) and run `npm run dev`. Local preview mocks ChatGPT identity;

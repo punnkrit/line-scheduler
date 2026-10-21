@@ -9,6 +9,7 @@ import subprocess
 import time
 import uuid
 import unicodedata
+import sys
 from datetime import datetime, timezone
 
 import boto3
@@ -159,6 +160,9 @@ def controller(event, context):
             return response(405, {"error": "Method not allowed"})
         body = json.loads(event.get("body") or "{}")
         action = body.get("action")
+        if isinstance(action,str) and action.startswith("login_"):
+            from cloud_login import api
+            return api(sys.modules[__name__],body)
         if action == "upload":
             return start_upload(body)
         if action == "refresh":
@@ -323,6 +327,9 @@ def worker(event, context):
     job_id = event.get("id")
     claimed = False
     try:
+        if event.get("action")=="login":
+            from cloud_login import run
+            return run(sys.modules[__name__],owner,event.get("attempt"))
         if event.get("action")=="probe":
             session_table.put_item(Item={"id":"session","blob":"","version":1},ConditionExpression="attribute_not_exists(id)")
             try:

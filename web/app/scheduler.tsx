@@ -1,6 +1,7 @@
 "use client";
 import {useEffect,useRef,useState} from "react";
 import {ArrowUpRight, Check, CheckCheck, Clock3, LoaderCircle, MessageCircle, Paperclip, Plus, RefreshCw, Send, ShieldCheck, X} from "lucide-react";
+import LineLogin from "./line-login";
 type Chat={id:string;name:string};
 type Job={id:string;chat_name:string;text:string;attachment?:{name:string;size:number};due_at:number;created_at:number;status:string;error?:string;result_info?:{error?:string}};
 type DraftFile={id:string;file:File;uploaded:boolean};
@@ -91,6 +92,7 @@ export default function Scheduler(){
    <button className="compose-link" onClick={()=>formRef.current?.focus()}><Plus size={18}/> New message</button>
    <nav aria-label="Messages"><button className={tab==="upcoming"?"active":""} onClick={()=>setTab("upcoming")}><Clock3 size={18}/> Scheduled <span>{upcoming.length}</span></button><button className={tab==="history"?"active":""} onClick={()=>setTab("history")}><CheckCheck size={18}/> History</button></nav>
    <div className="connection"><span className={"status-dot "+(data.connected?"online":"")}/><strong>{data.connected?"LINE connected":loaded?"Sending paused":"Connecting…"}</strong></div>
+   <LineLogin connected={data.connected} onStarted={()=>setData(previous=>({...previous,connected:false}))} onConnected={()=>{void refresh()}}/>
    <div className="sidebar-foot"><ShieldCheck size={15}/><span>Private to you</span></div>
   </aside>
   <main>

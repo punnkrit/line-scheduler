@@ -23,9 +23,9 @@ Images arrive as **file attachments**, not native photo bubbles. Native image se
 | **DynamoDB** | Jobs, receipts, and a separately encrypted LINE session |
 | **Private S3** | Temporary attachment storage, pinned to immutable versions |
 
-**LINE login starts in a private QR terminal on your computer.** Approve it on your phone, then the migration helper encrypts and transfers the session to AWS. Sites never receives the LINE session. ChatGPT sign-in only opens your private interface. After setup, the computer can be off.
+**Login and reconnect happen in the private Site.** Choose Connect/Reconnect LINE, scan the QR using LINE on your phone, and approve. AWS securely saves the session; Sites never receives the LINE credentials. Your laptop can be off after setup.
 
-There is no browser-based LINE reconnect wizard yet. The [architecture guide](docs/ARCHITECTURE.md) explains the three logins, session storage, attachment flow, timing, and recovery.
+The [architecture guide](docs/ARCHITECTURE.md) explains the three logins, temporary QR flow, session storage, timing, and recovery. GitHub contains the source and deployment instructions; the running copies live on Sites and AWS.
 
 ## Build your own
 

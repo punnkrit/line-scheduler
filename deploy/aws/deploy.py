@@ -47,6 +47,7 @@ def deploy(site_origin=None):
     package=LOCAL/"function.zip"
     with zipfile.ZipFile(package,"w",zipfile.ZIP_DEFLATED) as z:
         z.write(ROOT/"handler.py","handler.py")
+        z.write(ROOT/"cloud_login.py","cloud_login.py")
         info=zipfile.ZipInfo("cloudline");info.external_attr=0o100755<<16;info.compress_type=zipfile.ZIP_DEFLATED
         z.writestr(info,(LOCAL/"cloudline").read_bytes())
     artifact="builds/"+hashlib.sha256(package.read_bytes()).hexdigest()+".zip"
@@ -87,6 +88,10 @@ def deploy(site_origin=None):
     else:
         parameters += [{"ParameterKey":"SessionKey","ParameterValue":base64.b64encode(secrets.token_bytes(32)).decode()},
                        {"ParameterKey":"BridgeToken","ParameterValue":secrets.token_urlsafe(48)}]
+    if existing and any(p["ParameterKey"]=="QRKey" for p in existing["Stacks"][0].get("Parameters",[])):
+        parameters.append({"ParameterKey":"QRKey","UsePreviousValue":True})
+    else:
+        parameters.append({"ParameterKey":"QRKey","ParameterValue":base64.b64encode(secrets.token_bytes(32)).decode()})
     call("cloudformation","update-stack" if existing else "create-stack",payload={
         "StackName":STACK,"TemplateBody":body,"Parameters":parameters,"Capabilities":["CAPABILITY_IAM"]})
     print("Stack update started." if existing else "Stack creation started.")

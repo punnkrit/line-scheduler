@@ -17,6 +17,7 @@ class DeploymentAccountTests(unittest.TestCase):
                 local = root / ".local"
                 local.mkdir()
                 (root / "handler.py").write_text("# synthetic handler\n")
+                (root / "cloud_login.py").write_text("# synthetic login\n")
                 (local / "cloudline").write_bytes(b"synthetic binary")
                 old_bucket = "line-scheduler-artifacts-" + previous_account + "-synthetic"
                 old_state = {"bucket": old_bucket}
