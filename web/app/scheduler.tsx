@@ -1,7 +1,9 @@
 "use client";
 import {useEffect,useRef,useState} from "react";
-import {ArrowUpRight, Check, CheckCheck, Clock3, LoaderCircle, MessageCircle, Paperclip, Plus, RefreshCw, Send, ShieldCheck, X} from "lucide-react";
+import {ArrowUpRight, Check, CheckCheck, CircleAlert, Clock3, LoaderCircle, MessageCircle, Paperclip, Plus, RefreshCw, Send, ShieldCheck, X} from "lucide-react";
 import LineLogin from "./line-login";
+import ConversationPicker from "./conversation-picker";
+import HistoryControls,{emptyHistoryFilters,HistoryFilters,matchesHistory,messageStatusLabels as labels} from "./message-history";
 type Chat={id:string;name:string};
 type Job={id:string;chat_name:string;text:string;attachment?:{name:string;size:number};due_at:number;created_at:number;status:string;error?:string;result_info?:{error?:string}};
 type DraftFile={id:string;file:File;uploaded:boolean};
@@ -20,17 +22,20 @@ function toUTC(value:string,zone:string) {
   return new Date(result);
 }
 function display(seconds:number,zone:string){return new Intl.DateTimeFormat("en",{timeZone:zone,month:"short",day:"numeric",hour:"numeric",minute:"2-digit",timeZoneName:"short"}).format(seconds*1000)}
-const labels:Record<string,string>={queued:"Confirming schedule",scheduled:"Scheduled",sending:"Sending",sent:"Sent",cancelled:"Cancelled",failed:"Not sent",unknown:"Check LINE",expired:"Missed send time"};
 export default function Scheduler(){
  const [data,setData]=useState<Data>(empty),[loaded,setLoaded]=useState(false),[error,setError]=useState(""),[notice,setNotice]=useState("");
- const [chat,setChat]=useState(""),[search,setSearch]=useState(""),[text,setText]=useState(""),[when,setWhen]=useState(""),[zone,setZone]=useState("UTC");
+ const [chat,setChat]=useState(""),[text,setText]=useState(""),[when,setWhen]=useState(""),[zone,setZone]=useState("UTC");
  const [busy,setBusy]=useState(false),[refreshing,setRefreshing]=useState(false),[tab,setTab]=useState("upcoming");
  const [files,setFiles]=useState<DraftFile[]>([]),[dragging,setDragging]=useState(false),[progress,setProgress]=useState("");
+ const [historyFilters,setHistoryFilters]=useState<HistoryFilters>({...emptyHistoryFilters});
+ const messageList=useRef<HTMLDivElement>(null);
  const filePicker=useRef<HTMLInputElement>(null),submitting=useRef(false);
  const requestId=useRef(""),formRef=useRef<HTMLTextAreaElement>(null);
  async function load(){try{const r=await fetch("/api/scheduler",{cache:"no-store"});const d=await r.json() as Data & {error?:string};if(!r.ok)throw new Error(d.error);setData(d);setLoaded(true);}catch(e){setLoaded(true);setData(previous=>({...previous,connected:false}));setError(e instanceof Error?e.message:"Could not load messages.");}}
  useEffect(()=>{const z=Intl.DateTimeFormat().resolvedOptions().timeZone;setZone(z);setWhen(localValue(new Date(Date.now()+3600000),z));load();const timer=setInterval(load,15000);return()=>clearInterval(timer);},[]);
  useEffect(()=>{requestId.current="";},[text]);
+ useEffect(()=>{messageList.current?.scrollTo({top:0});},[tab,historyFilters]);
+ useEffect(()=>{if(!notice)return;const timer=setTimeout(()=>setNotice(""),5000);return()=>clearTimeout(timer);},[notice]);
  useEffect(()=>{const prevent=(e:DragEvent)=>{if(e.dataTransfer?.types.includes("Files"))e.preventDefault()};window.addEventListener("dragover",prevent);window.addEventListener("drop",prevent);return()=>{window.removeEventListener("dragover",prevent);window.removeEventListener("drop",prevent)}},[]);
  function addFiles(selected:FileList|null){
   if(!selected||busy)return;
@@ -82,8 +87,9 @@ export default function Scheduler(){
  }
  async function cancel(id:string){setError("");try{await post({action:"cancel",id});await load();setNotice("Scheduled message cancelled.");}catch(e){setError(e instanceof Error?e.message:"Could not cancel.");}}
  const upcoming=data.jobs.filter(j=>pending.includes(j.status));
- const shown=(tab==="upcoming"?upcoming:data.jobs.filter(j=>!pending.includes(j.status))).sort((a,b)=>tab==="upcoming"?a.due_at-b.due_at:b.created_at-a.created_at);
- const filtered=data.chats.filter(c=>c.name.toLocaleLowerCase().includes(search.toLocaleLowerCase()));
+ const history=data.jobs.filter(j=>!pending.includes(j.status));
+ const shown=(tab==="upcoming"?upcoming:history.filter(job=>matchesHistory(job,historyFilters,zone))).sort((a,b)=>tab==="upcoming"?a.due_at-b.due_at:b.created_at-a.created_at);
+ const hasHistoryFilters=Object.values(historyFilters).some(value=>value.trim());
  const zones=Array.from(new Set([zone,"Asia/Bangkok","America/Los_Angeles","Asia/Singapore","Europe/London","UTC"]));
  let preview="Choose when it should arrive";try{if(when)preview=display(toUTC(when,zone).getTime()/1000,zone);}catch{}
  return <div className="workspace">
@@ -97,14 +103,14 @@ export default function Scheduler(){
   </aside>
   <main>
    <h1 className="sr-only">LINE Scheduler</h1>
-   {error&&<div className="feedback error" role="alert">{error}<button aria-label="Dismiss error" onClick={()=>setError("")}><X size={16}/></button></div>}
-   {notice&&<div className="feedback success" role="status"><Check size={16}/>{notice}<button aria-label="Dismiss notification" onClick={()=>setNotice("")}><X size={16}/></button></div>}
+   <div className="notification-region">
+    {error?<div className="feedback error" role="alert"><CircleAlert size={18}/><span>{error}</span><button aria-label="Dismiss error" onClick={()=>setError("")}><X size={18}/></button></div>:notice?<div className="feedback success" role="status"><Check size={18}/><span>{notice}</span><button aria-label="Dismiss notification" onClick={()=>setNotice("")}><X size={18}/></button></div>:null}
+   </div>
    <div className="main-grid">
     <section className={"composer "+(dragging?"dragging":"")} aria-labelledby="composer-title" onDragOver={e=>{if(e.dataTransfer.types.includes("Files")){e.preventDefault();setDragging(true)}}} onDragLeave={e=>{if(!e.currentTarget.contains(e.relatedTarget as Node))setDragging(false)}} onDrop={e=>{e.preventDefault();setDragging(false);addFiles(e.dataTransfer.files)}}>
      <fieldset className="compose-fields" disabled={busy}>
      <div className="section-heading"><h2 id="composer-title">New message</h2></div>
-     <div className="recipient-row"><label htmlFor="recipient">To</label><select id="recipient" value={chat} onChange={e=>setChat(e.target.value)}><option value="">Choose a conversation</option>{filtered.map(c=><option value={c.id} key={c.id}>{c.name}</option>)}</select><button className={"icon-button "+(refreshing?"spinning":"")} onClick={refresh} disabled={refreshing} title="Refresh conversations" aria-label="Refresh conversations"><RefreshCw size={17}/></button></div>
-     {data.chats.length>15&&<input className="chat-search" aria-label="Filter conversations" placeholder="Find a conversation…" value={search} onChange={e=>setSearch(e.target.value)}/>}
+     <div className="recipient-row"><label htmlFor="recipient">To</label><ConversationPicker chats={data.chats} value={chat} onChange={setChat} disabled={busy}/><button className={"icon-button "+(refreshing?"spinning":"")} onClick={refresh} disabled={refreshing} title="Refresh conversations" aria-label="Refresh conversations"><RefreshCw size={17}/></button></div>
      <label className="sr-only" htmlFor="message">Message</label><textarea id="message" ref={formRef} value={text} onChange={e=>setText(e.target.value)} maxLength={10000} placeholder="Message"/>
      <div className="message-meta"><span><ShieldCheck size={14}/> Letter Sealing required</span><span>{text.length.toLocaleString()} / 10,000</span></div>
      <div className="attachments">
@@ -125,7 +131,10 @@ export default function Scheduler(){
     <section className="outbox" aria-labelledby="outbox-title">
      <div className="section-heading"><h2 id="outbox-title">Messages</h2><button className="icon-button" aria-label="Refresh message status" onClick={()=>{setError("");load()}}><RefreshCw size={16}/></button></div>
      <div className="tabs"><button className={tab==="upcoming"?"selected":""} onClick={()=>setTab("upcoming")}>Scheduled <span>{upcoming.length}</span></button><button className={tab==="history"?"selected":""} onClick={()=>setTab("history")}>History</button></div>
-     {!loaded?<div className="empty"><LoaderCircle className="spinning" size={30}/><h3>Loading messages…</h3></div>:shown.length===0&&error?<div className="empty"><Clock3 size={30}/><h3>Messages unavailable</h3></div>:shown.length===0?<div className="empty"><h3>{tab==="upcoming"?"No scheduled messages":"No message history"}</h3></div>:<div className="job-list">{shown.map(job=><article className="job" key={job.id}><div className="job-heading"><span className="avatar">{Array.from(job.chat_name)[0]||"?"}</span><div><h3>{job.chat_name}</h3><time dateTime={new Date(job.due_at*1000).toISOString()}>{display(job.due_at,zone)}</time></div><span className={"badge "+job.status}>{labels[job.status]||job.status}</span></div><p className="job-text">{job.text}</p>{job.attachment&&<p className="job-file"><Paperclip size={14}/>{job.attachment.name}<small>{fileSize(job.attachment.size)}</small></p>}{(job.error||job.result_info?.error)&&<p className="job-error">{job.error||job.result_info?.error}</p>}{["queued","scheduled"].includes(job.status)&&<button className="cancel" onClick={()=>cancel(job.id)}>Cancel send</button>}</article>)}</div>}
+     {tab==="history"&&<HistoryControls jobs={history} filters={historyFilters} onChange={setHistoryFilters} resultCount={shown.length}/>}
+     <div className="message-scroll" ref={messageList} role="region" aria-label={tab==="history"?"Message history":"Scheduled messages"} tabIndex={0}>
+     {!loaded?<div className="empty"><LoaderCircle className="spinning" size={30}/><h3>Loading messages…</h3></div>:shown.length===0&&error&&!data.jobs.length?<div className="empty"><Clock3 size={30}/><h3>Messages unavailable</h3></div>:shown.length===0?<div className="empty"><h3>{tab==="upcoming"?"No scheduled messages":hasHistoryFilters?"No matching messages":"No message history"}</h3>{tab==="history"&&hasHistoryFilters&&<p>Try another person, date range, or search, or clear your filters.</p>}</div>:<div className="job-list">{shown.map(job=><article className="job" key={job.id}><div className="job-heading"><span className="avatar">{Array.from(job.chat_name)[0]||"?"}</span><div><h3>{job.chat_name}</h3><time dateTime={new Date(job.due_at*1000).toISOString()}>{display(job.due_at,zone)}</time></div><span className={"badge "+job.status}>{labels[job.status]||job.status}</span></div><p className="job-text">{job.text}</p>{job.attachment&&<p className="job-file"><Paperclip size={14}/>{job.attachment.name}<small>{fileSize(job.attachment.size)}</small></p>}{(job.error||job.result_info?.error)&&<p className="job-error">{job.error||job.result_info?.error}</p>}{["queued","scheduled"].includes(job.status)&&<button className="cancel" onClick={()=>cancel(job.id)}>Cancel send</button>}</article>)}</div>}
+     </div>
      <p className="outbox-note">Times shown in {zone.replaceAll("_"," ")}.<br/>History is kept for 90 days.</p>
     </section>
    </div>
