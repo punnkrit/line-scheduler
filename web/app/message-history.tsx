@@ -4,16 +4,16 @@ import {Search, X} from "lucide-react";
 import {Popover} from "radix-ui";
 import {useRef} from "react";
 
-export const messageStatusLabels:Record<string,string>={queued:"Confirming schedule",scheduled:"Scheduled",sending:"Sending",sent:"Sent",cancelled:"Cancelled",failed:"Not sent",unknown:"Check LINE",expired:"Missed send time"};
+export const messageStatusLabels:Record<string,string>={queued:"Confirming schedule",scheduled:"Scheduled",sending:"Sending",sent:"Sent",partial:"Partly sent",cancelled:"Cancelled",failed:"Not sent",unknown:"Check LINE",expired:"Missed send time"};
 export type HistoryFilters={person:string;query:string;from:string;to:string;status:string};
 export const emptyHistoryFilters:HistoryFilters={person:"",query:"",from:"",to:"",status:""};
-type HistoryItem={chat_name:string;text:string;due_at:number;status:string;attachment?:{name:string}};
+type HistoryItem={chat_name:string;text:string;due_at:number;status:string;attachment?:{name:string};photos?:{name:string}[]};
 
 export function matchesHistory(job:HistoryItem,filters:HistoryFilters,zone:string){
  if(filters.person&&job.chat_name!==filters.person)return false;
  if(filters.status&&job.status!==filters.status)return false;
  const query=filters.query.trim().normalize("NFKC").toLocaleLowerCase();
- if(query&&!`${job.text}\n${job.attachment?.name??""}`.normalize("NFKC").toLocaleLowerCase().includes(query))return false;
+ if(query&&!`${job.text}\n${job.attachment?.name??""}\n${job.photos?.map(photo=>photo.name).join("\n")??""}`.normalize("NFKC").toLocaleLowerCase().includes(query))return false;
  if(filters.from||filters.to){
   const parts=Object.fromEntries(new Intl.DateTimeFormat("en-CA",{timeZone:zone,year:"numeric",month:"2-digit",day:"2-digit"}).formatToParts(job.due_at*1000).map(part=>[part.type,part.value]));
   const date=`${parts.year}-${parts.month}-${parts.day}`;

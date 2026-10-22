@@ -9,7 +9,9 @@ agent is involved in scheduled execution.
 
 - Immediate and scheduled text/file sends, cancellation, and history.
 - Private S3 uploads with exact size limits, immutable version pinning, and SHA-256 checks.
-- Images use generic encrypted file delivery; native images remain disabled.
+- JPEG/still-PNG photos use native encrypted image delivery, grouped in sets of at most ten.
+- Each photo is encrypted once; identical ciphertext is uploaded for the full image and preview. A fresh key is used for every photo.
+- Group members are sent sequentially with a server-issued group ID. Confirmed receipts are saved before sending another photo; partial/unknown groups never replay.
 - UTC schedule storage with explicit time-zone selection in the interface.
 - Letter Sealing is mandatory. No plaintext downgrade or send retries.
 - Durable jobs and session state in separate DynamoDB tables.
@@ -172,3 +174,26 @@ Windows migration path above is optional; routine reauthentication needs no lapt
 The deployment creates a separate QRKey parameter for short-lived encrypted
 display events. Existing SessionKey and BridgeToken values are preserved.
 See [the login lifecycle and security boundaries](../../docs/ARCHITECTURE.md#line-sign-in-and-reconnect).
+
+## Native photo groups
+
+The Site detects JPEG/PNG signatures and submits consecutive selections in groups
+of ten (up to 50 files per selection). Other formats continue as generic files.
+The backend binds each upload ID to a single group and pins every S3 version.
+Cancellation and completion clean up all exact versions. Each group has its own
+durable job; separately scheduled groups have no cross-job ordering guarantee.
+Existing queued generic-file jobs retain their original delivery behavior.
+
+The worker loads and verifies one photo at a time, limiting memory, and calls
+`send-image` under the existing account lease with mandatory Letter Sealing.
+Group metadata starts with GID 0; subsequent sends require the confirmed server
+GID. Every photo receipt is durably saved before the next operation. Failure,
+missing group ID, integrity failure, insufficient execution time or an uncertain
+response stops the group. `partial` means some receipts were confirmed and the
+rest were not sent; `unknown` requires checking LINE. No group is retried.
+
+The client's original distinct-thumbnail CTR representation remains prohibited.
+The replacement sends one encrypted JPEG twice without encrypting two different
+plaintexts under one stream. Tests cover fresh keys, real V2 payload decryption,
+an independent WebCrypto recipient, grouping limits and failure boundaries.
+No live image send/display validation is claimed by these synthetic checks.

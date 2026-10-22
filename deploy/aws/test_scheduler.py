@@ -21,6 +21,9 @@ class Table:
         item=self.items.setdefault(Key["id"],{"id":Key["id"]})
         values=ExpressionAttributeValues
         cond=kw.get("ConditionExpression","")
+        if ":job" in values:
+            if item.get("photo_job") not in (None,values[":job"]):raise ClientError()
+            item["photo_job"]=values[":job"]
         if "#s IN" in cond and item.get("status") not in [values.get(":q"),values.get(":p"),values.get(":s")]:raise ClientError()
         if "#s = :sending" in cond and item.get("status")!="sending":raise ClientError()
         if ":s" in values:item["status"]=values[":s"]

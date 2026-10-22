@@ -1,12 +1,13 @@
 "use client";
+import {attachmentGroups,photoSignature,type AttachmentKind} from "./photo-groups";
 import {useEffect,useRef,useState} from "react";
 import {ArrowUpRight, Check, CheckCheck, CircleAlert, Clock3, LoaderCircle, MessageCircle, Paperclip, Plus, RefreshCw, Send, ShieldCheck, X} from "lucide-react";
 import LineLogin from "./line-login";
 import ConversationPicker from "./conversation-picker";
 import HistoryControls,{emptyHistoryFilters,HistoryFilters,matchesHistory,messageStatusLabels as labels} from "./message-history";
 type Chat={id:string;name:string};
-type Job={id:string;chat_name:string;text:string;attachment?:{name:string;size:number};due_at:number;created_at:number;status:string;error?:string;result_info?:{error?:string}};
-type DraftFile={id:string;file:File;uploaded:boolean};
+type Job={id:string;chat_name:string;text:string;attachment?:{name:string;size:number};photos?:{name:string;size:number}[];due_at:number;created_at:number;status:string;error?:string;result_info?:{error?:string;receipts?:{message_id:string}[];total?:number}};
+type DraftFile={id:string;file:File;uploaded:boolean;kind:AttachmentKind};
 type Reply={error?:string;scheduled?:boolean;upload?:{url:string;fields:Record<string,string>}};
 function fileSize(n:number){return n<1024?`${n} B`:n<1048576?`${(n/1024).toFixed(1)} KB`:`${(n/1048576).toFixed(1)} MB`;}
 type Data={connected:boolean;chats:Chat[];jobs:Job[];connection_error?:string;refreshed_at?:number};
@@ -30,6 +31,7 @@ export default function Scheduler(){
  const [historyFilters,setHistoryFilters]=useState<HistoryFilters>({...emptyHistoryFilters});
  const messageList=useRef<HTMLDivElement>(null);
  const filePicker=useRef<HTMLInputElement>(null),submitting=useRef(false);
+ const readingFiles=useRef(false);
  const requestId=useRef(""),formRef=useRef<HTMLTextAreaElement>(null);
  async function load(){try{const r=await fetch("/api/scheduler",{cache:"no-store"});const d=await r.json() as Data & {error?:string};if(!r.ok)throw new Error(d.error);setData(d);setLoaded(true);}catch(e){setLoaded(true);setData(previous=>({...previous,connected:false}));setError(e instanceof Error?e.message:"Could not load messages.");}}
  useEffect(()=>{const z=Intl.DateTimeFormat().resolvedOptions().timeZone;setZone(z);setWhen(localValue(new Date(Date.now()+3600000),z));load();const timer=setInterval(load,15000);return()=>clearInterval(timer);},[]);
@@ -37,13 +39,17 @@ export default function Scheduler(){
  useEffect(()=>{messageList.current?.scrollTo({top:0});},[tab,historyFilters]);
  useEffect(()=>{if(!notice)return;const timer=setTimeout(()=>setNotice(""),5000);return()=>clearTimeout(timer);},[notice]);
  useEffect(()=>{const prevent=(e:DragEvent)=>{if(e.dataTransfer?.types.includes("Files"))e.preventDefault()};window.addEventListener("dragover",prevent);window.addEventListener("drop",prevent);return()=>{window.removeEventListener("dragover",prevent);window.removeEventListener("drop",prevent)}},[]);
- function addFiles(selected:FileList|null){
-  if(!selected||busy)return;
+ async function addFiles(selected:FileList|null){
+  if(!selected||busy||readingFiles.current)return;
   const incoming=Array.from(selected);setError("");
-  if(files.length+incoming.length>5){setError("Attach up to 5 files at a time.");return;}
+  if(files.length+incoming.length>50){setError("Attach up to 50 files at a time. Photos are grouped in sets of 10.");return;}
   if(incoming.some(f=>f.size>20*1024*1024)){setError("Each file must be 20 MB or smaller.");return;}
   if(incoming.some(f=>!f.name||new TextEncoder().encode(f.name).length>255||/[\\/\u0000-\u001f\u007f-\u009f]/.test(f.name))){setError("Use filenames without slashes or control characters, up to 255 bytes.");return;}
-  setFiles(current=>[...current,...incoming.map(file=>({id:crypto.randomUUID().replaceAll("-",""),file,uploaded:false}))]);
+  try{
+   readingFiles.current=true;setBusy(true);
+   const additions=await Promise.all(incoming.map(async file=>({id:crypto.randomUUID().replaceAll("-",""),file,uploaded:false,kind:photoSignature(new Uint8Array(await file.slice(0,12).arrayBuffer()))?"photo" as const:"file" as const})));
+   setFiles(current=>[...current,...additions]);
+  }catch{setError("Could not read the selected files. Please select them again.");}finally{readingFiles.current=false;setBusy(false);}
  }
  async function post(body:unknown){const r=await fetch("/api/scheduler",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});const d=await r.json() as Reply;if(!r.ok)throw new Error(d.error);return d;}
  async function upload(item:DraftFile){
@@ -61,7 +67,7 @@ export default function Scheduler(){
   item.uploaded=true;setFiles(current=>current.map(f=>f.id===item.id?{...item}:f));
  }
  async function submit(immediate=false){
-  if(submitting.current)return;setError("");setNotice("");let accepted=0;
+  if(submitting.current||readingFiles.current)return;setError("");setNotice("");let accepted=0;
   try{
    if(!chat)throw new Error("Choose a conversation.");
    if(!text.trim()&&!files.length)throw new Error("Write a message or attach a file.");
@@ -76,7 +82,11 @@ export default function Scheduler(){
     requestId.current ||= crypto.randomUUID().replaceAll("-","");
     await post({...common,id:requestId.current,text});accepted++;setText("");requestId.current="";
    }
-   for(const item of files){await post({...common,id:item.id,text:"",file:true});accepted++;setFiles(current=>current.filter(f=>f.id!==item.id));}
+   for(const group of attachmentGroups(files)){
+    const first=group[0];
+    await post({...common,id:first.id,text:"",...(first.kind==="photo"?{photos:group.map(item=>item.id)}:{file:true})});
+    accepted++;const ids=new Set(group.map(item=>item.id));setFiles(current=>current.filter(item=>!ids.has(item.id)));
+   }
    setNotice(immediate?`${accepted} message${accepted===1?"":"s"} queued for sending.`:`${accepted} message${accepted===1?"":"s"} scheduled.`);
    await load();
   }catch(e){setError((accepted?`${accepted} message${accepted===1?"":"s"} already accepted. `:"")+(e instanceof Error?e.message:"Could not confirm scheduling. Refresh before trying again."));await load();}finally{submitting.current=false;setBusy(false);setProgress("");}
@@ -86,6 +96,7 @@ export default function Scheduler(){
   catch(e){setError(e instanceof Error?e.message:"Could not refresh.");setRefreshing(false);}
  }
  async function cancel(id:string){setError("");try{await post({action:"cancel",id});await load();setNotice("Scheduled message cancelled.");}catch(e){setError(e instanceof Error?e.message:"Could not cancel.");}}
+ const photoGroups=attachmentGroups(files).filter(group=>group[0].kind==="photo");
  const upcoming=data.jobs.filter(j=>pending.includes(j.status));
  const history=data.jobs.filter(j=>!pending.includes(j.status));
  const shown=(tab==="upcoming"?upcoming:history.filter(job=>matchesHistory(job,historyFilters,zone))).sort((a,b)=>tab==="upcoming"?a.due_at-b.due_at:b.created_at-a.created_at);
@@ -116,7 +127,7 @@ export default function Scheduler(){
      <div className="attachments">
       <input ref={filePicker} type="file" multiple className="sr-only" tabIndex={-1} aria-label="Choose attachments" onChange={e=>{addFiles(e.target.files);e.target.value=""}}/>
       <button type="button" className="attach-button" onClick={()=>filePicker.current?.click()}><Paperclip size={16}/>{dragging?"Drop files here":"Attach files"}</button><span className="attachment-hint">or drop here · 20 MB each</span>
-      {files.length>0&&<><ul className="file-list">{files.map(item=><li key={item.id}><Paperclip size={14}/><span>{item.file.name}<small>{fileSize(item.file.size)}</small></span><button aria-label={`Remove ${item.file.name}`} onClick={()=>setFiles(current=>current.filter(f=>f.id!==item.id))}><X size={15}/></button></li>)}</ul><p className="file-note">Each attachment sends separately. Images send as files.</p></>}
+      {files.length>0&&<><ul className="file-list">{files.map(item=><li key={item.id}><Paperclip size={14}/><span>{item.file.name}<small>{item.kind==="photo"?"Photo · ":"File · "}{fileSize(item.file.size)}</small></span><button aria-label={`Remove ${item.file.name}`} onClick={()=>setFiles(current=>current.filter(f=>f.id!==item.id))}><X size={15}/></button></li>)}</ul>{photoGroups.length>0&&<p className="file-note">Photo groups: {photoGroups.map(group=>group.length).join(" + ")}</p>}<p className="file-note">JPEG and still PNG photos send in groups of up to 10. Larger selections start another group. Photos are resized; other files send separately.</p></>}
       {progress&&<p className="file-note" role="status">{progress}</p>}
      </div>
      <div className="delivery">
@@ -133,7 +144,7 @@ export default function Scheduler(){
      <div className="tabs"><button className={tab==="upcoming"?"selected":""} onClick={()=>setTab("upcoming")}>Scheduled <span>{upcoming.length}</span></button><button className={tab==="history"?"selected":""} onClick={()=>setTab("history")}>History</button></div>
      {tab==="history"&&<HistoryControls jobs={history} filters={historyFilters} onChange={setHistoryFilters} resultCount={shown.length}/>}
      <div className="message-scroll" ref={messageList} role="region" aria-label={tab==="history"?"Message history":"Scheduled messages"} tabIndex={0}>
-     {!loaded?<div className="empty"><LoaderCircle className="spinning" size={30}/><h3>Loading messages…</h3></div>:shown.length===0&&error&&!data.jobs.length?<div className="empty"><Clock3 size={30}/><h3>Messages unavailable</h3></div>:shown.length===0?<div className="empty"><h3>{tab==="upcoming"?"No scheduled messages":hasHistoryFilters?"No matching messages":"No message history"}</h3>{tab==="history"&&hasHistoryFilters&&<p>Try another person, date range, or search, or clear your filters.</p>}</div>:<div className="job-list">{shown.map(job=><article className="job" key={job.id}><div className="job-heading"><span className="avatar">{Array.from(job.chat_name)[0]||"?"}</span><div><h3>{job.chat_name}</h3><time dateTime={new Date(job.due_at*1000).toISOString()}>{display(job.due_at,zone)}</time></div><span className={"badge "+job.status}>{labels[job.status]||job.status}</span></div><p className="job-text">{job.text}</p>{job.attachment&&<p className="job-file"><Paperclip size={14}/>{job.attachment.name}<small>{fileSize(job.attachment.size)}</small></p>}{(job.error||job.result_info?.error)&&<p className="job-error">{job.error||job.result_info?.error}</p>}{["queued","scheduled"].includes(job.status)&&<button className="cancel" onClick={()=>cancel(job.id)}>Cancel send</button>}</article>)}</div>}
+     {!loaded?<div className="empty"><LoaderCircle className="spinning" size={30}/><h3>Loading messages…</h3></div>:shown.length===0&&error&&!data.jobs.length?<div className="empty"><Clock3 size={30}/><h3>Messages unavailable</h3></div>:shown.length===0?<div className="empty"><h3>{tab==="upcoming"?"No scheduled messages":hasHistoryFilters?"No matching messages":"No message history"}</h3>{tab==="history"&&hasHistoryFilters&&<p>Try another person, date range, or search, or clear your filters.</p>}</div>:<div className="job-list">{shown.map(job=><article className="job" key={job.id}><div className="job-heading"><span className="avatar">{Array.from(job.chat_name)[0]||"?"}</span><div><h3>{job.chat_name}</h3><time dateTime={new Date(job.due_at*1000).toISOString()}>{display(job.due_at,zone)}</time></div><span className={"badge "+job.status}>{labels[job.status]||job.status}</span></div><p className="job-text">{job.text}</p>{job.attachment&&<p className="job-file"><Paperclip size={14}/>{job.attachment.name}<small>{fileSize(job.attachment.size)}</small></p>}{job.photos&&<div><p className="job-file">{job.photos.length} photo{job.photos.length===1?"":"s"}{job.result_info?.receipts&&` · ${job.result_info.receipts.length} confirmed`}</p>{job.photos.map((photo,index)=><p className="job-file" key={index}>{photo.name}<small>{fileSize(photo.size)}</small></p>)}</div>}{(job.error||job.result_info?.error)&&<p className="job-error">{job.error||job.result_info?.error}</p>}{["queued","scheduled"].includes(job.status)&&<button className="cancel" onClick={()=>cancel(job.id)}>Cancel send</button>}</article>)}</div>}
      </div>
      <p className="outbox-note">Times shown in {zone.replaceAll("_"," ")}.<br/>History is kept for 90 days.</p>
     </section>

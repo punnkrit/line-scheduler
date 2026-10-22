@@ -57,6 +57,11 @@ class AttachmentTests(unittest.TestCase):
         self.s3.head_object.return_value={"ContentLength":len(self.content)}
         with self.assertRaises(ValueError):h.prepare_attachment(self.id)
         self.s3.put_object_tagging.assert_not_called()
+    def test_group_bound_upload_cannot_be_used_by_another_job(self):
+        h.jobs.items["upload_"+self.id]={**self.spec,"expires_at":10**12,"photo_job":"a"*32}
+        with self.assertRaises(ValueError):h.prepare_attachment(self.id)
+        with self.assertRaises(ValueError):h.prepare_attachment(self.id,"c"*32)
+        self.s3.head_object.assert_not_called()
     def test_file_read_checks_hash_and_uses_pinned_version(self):
         attachment={**self.spec,"size":Decimal(len(self.content)),"key":"uploads/"+self.id,"version":"v1"}
         self.s3.get_object.return_value={"Body":io.BytesIO(self.content)}

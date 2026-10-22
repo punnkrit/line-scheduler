@@ -30,3 +30,5 @@ jobs:
         run: npm ci
       - name: Check application types
         run: npx tsc --noEmit
+      - name: Check photo grouping and file signatures
+        run: node ../scripts/test_photo_groups.mjs

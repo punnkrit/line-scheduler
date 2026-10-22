@@ -98,10 +98,12 @@ def start_upload(body):
     return response(200, {"upload":upload})
 
 
-def prepare_attachment(job_id):
+def prepare_attachment(job_id, photo_job=None):
     metadata = read(jobs, "upload_"+job_id)
     if not metadata or int(metadata["expires_at"]) < time.time():
         raise ValueError("Upload expired")
+    if metadata.get("photo_job") and metadata["photo_job"] != (photo_job or job_id):
+        raise ValueError("Upload already belongs to another photo group")
     spec = file_spec({**metadata, "size":int(metadata["size"])})
     key = "uploads/"+job_id
     head = objects.head_object(Bucket=os.environ["FILES_BUCKET"],Key=key)
@@ -115,8 +117,7 @@ def prepare_attachment(job_id):
 
 
 def delete_attachment(job):
-    attachment = job.get("attachment")
-    if attachment:
+    for attachment in ([job["attachment"]] if job.get("attachment") else []) + job.get("photos", []):
         try:
             objects.delete_object(Bucket=os.environ["FILES_BUCKET"],Key=attachment["key"],VersionId=attachment["version"])
         except Exception:
@@ -202,8 +203,14 @@ def controller(event, context):
         if not ID.fullmatch(job_id) or not CHAT.fullmatch(chat):
             raise ValueError("Choose a conversation")
         is_file = body.get("file") is True
+        photo_ids = body.get("photos", [])
+        if (not isinstance(photo_ids, list) or len(photo_ids) > 10
+                or any(not isinstance(x,str) or not ID.fullmatch(x) for x in photo_ids)
+                or len(set(photo_ids)) != len(photo_ids)
+                or (photo_ids and (is_file or text or job_id != photo_ids[0]))):
+            raise ValueError("Select up to 10 photos per group")
         if (not isinstance(text,str) or len(text.encode("utf-16-le"))//2 > 10000
-                or (not is_file and not text.strip()) or (is_file and text)):
+                or (not is_file and not photo_ids and not text.strip()) or (is_file and text)):
             raise ValueError("Enter a message of at most 10,000 characters")
         immediate = body.get("immediate") is True
         now = int(time.time())
@@ -212,7 +219,8 @@ def controller(event, context):
             raise ValueError("Choose a time at least one minute ahead and within one year")
         existing = read(jobs,job_id)
         if existing:
-            if existing.get("chat") != chat or existing.get("text") != text or bool(existing.get("attachment")) != is_file:
+            if (existing.get("chat") != chat or existing.get("text") != text or bool(existing.get("attachment")) != is_file
+                    or existing.get("photo_ids", []) != photo_ids):
                 return response(409, {"error":"This request ID was already used."})
             return response(200, {"job":existing})
         meta = read(jobs,"meta") or {}
@@ -227,6 +235,15 @@ def controller(event, context):
                 "expires_at":due+90*86400}
         if is_file:
             item["attachment"] = prepare_attachment(job_id)
+        if photo_ids:
+            # Each upload ID belongs to this immutable group only. Conditional
+            # bindings also prevent a duplicate schedule under a different ID.
+            for photo_id in photo_ids:
+                jobs.update_item(Key={"id":"upload_"+photo_id},UpdateExpression="SET photo_job = :job",
+                    ConditionExpression="attribute_exists(id) AND (attribute_not_exists(photo_job) OR photo_job = :job)",
+                    ExpressionAttributeValues={":job":job_id})
+            item["photos"] = [prepare_attachment(x, job_id) for x in photo_ids]
+            item["photo_ids"] = photo_ids
         jobs.put_item(Item=item,ConditionExpression="attribute_not_exists(id)")
         try:
             if immediate:
@@ -319,6 +336,49 @@ def extract_chats(data):
             for r in rows if CHAT.fullmatch(r.get("id",""))]
 
 
+def send_photos(job, owner, context):
+    """One process/input per image bounds memory. Never retry a photo or group."""
+    receipts, group_id = [], "0"
+    total = len(job["photos"])
+    for index, attachment in enumerate(job["photos"], 1):
+        # Keep the existing account lease and Lambda timeout. Stop before a new
+        # operation without a useful budget; shorten the child deadline to fit.
+        remaining = context.get_remaining_time_in_millis() // 1000 if hasattr(context, "get_remaining_time_in_millis") else 120
+        if remaining < 15:
+            return {"status":"partial" if receipts else "failed", "receipts":receipts,
+                    "error":f"{len(receipts)} of {total} photos confirmed. Sender time limit reached; remaining photos were not attempted."}
+        try:
+            data = load_attachment(attachment)
+        except Exception:
+            return {"status":"partial" if receipts else "failed", "receipts":receipts,
+                    "error":f"{len(receipts)} of {total} photos confirmed. A photo failed its integrity check; remaining photos were not attempted."}
+        if total > 1:
+            data["image_group"] = {"id":group_id, "index":index, "total":total}
+        data["timeout_seconds"] = min(80, remaining - 5)
+        try:
+            result = run_client("send-image", owner, job["chat"], "", data)
+        except Exception:
+            result = {"status":"unknown"}
+        if (result.get("status") != "sent" or result.get("encrypted") is not True
+                or (total > 1 and (not re.fullmatch(r"[A-Za-z0-9_-]{1,256}", result.get("group_id", ""))
+                                  or result["group_id"] == "0"
+                                  or (index > 1 and result["group_id"] != group_id)))):
+            if result.get("accepted") is True and result.get("encrypted") is True and result.get("message_id"):
+                receipts.append({"message_id":result["message_id"],"encrypted":True})
+            status = "unknown" if result.get("status") != "failed" else ("partial" if receipts else "failed")
+            return {"status":status,"receipts":receipts,
+                    "error":f"{len(receipts)} of {total} photos confirmed. Check LINE before sending again; remaining photos were not attempted."}
+        receipts.append({"message_id":result["message_id"],"encrypted":True})
+        group_id = result.get("group_id", "")
+        # Persist each confirmed receipt before starting the next photo. A crash
+        # leaves a tombstone with progress, never an automatically replayed group.
+        progress = {"receipts":list(receipts),"total":total,"encrypted":True}
+        jobs.update_item(Key={"id":job["id"]},UpdateExpression="SET result_info = :r",
+            ConditionExpression="#s = :sending",ExpressionAttributeNames={"#s":"status"},
+            ExpressionAttributeValues={":r":progress,":sending":"sending"})
+    return {"status":"sent","receipts":receipts,"total":total,"encrypted":True}
+
+
 def worker(event, context):
     owner = context.aws_request_id
     if not acquire(owner,int(time.time())):
@@ -368,7 +428,9 @@ def worker(event, context):
             ExpressionAttributeNames={"#s":"status"},
             ExpressionAttributeValues={":s":"sending",":n":now,":q":"queued",":p":"scheduled"})
         claimed=True
-        if job.get("attachment"):
+        if job.get("photos"):
+            result=send_photos(job,owner,context)
+        elif job.get("attachment"):
             try:
                 file_input = load_attachment(job["attachment"])
             except Exception:

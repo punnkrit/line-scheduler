@@ -7,11 +7,12 @@ So I built one: a private front end on **ChatGPT Sites**, with a small **AWS ser
 ## What it does
 
 - Send now or schedule for later, with an explicit time zone.
-- Drag and drop images, text files, or other documents: up to five files, 20 MiB each.
-- Send text and each attachment as separate messages; cancel pending sends and review receipts.
+- Drag and drop images, text files, or other documents: up to 50 files, 20 MiB each.
+- Send JPEG/still-PNG photos as native images in groups of up to 10; larger selections start another group.
+- Send text and other files separately; cancel pending sends and review receipts.
 - Require LINE Letter Sealing. No silent downgrade and no automatic resend after an uncertain outcome.
 
-Images arrive as **file attachments**, not native photo bubbles. Native image sending is disabled because of an encryption flaw in the inherited format. Message order within a batch is not guaranteed.
+Photos require Letter Sealing. One normalized JPEG is encrypted once with a fresh key; the exact same encrypted bytes serve as the full image and preview, avoiding the former image/thumbnail encryption-stream reuse. Photos are resized and metadata is removed; other files retain their bytes. Groups are sent sequentially, stop on uncertainty, and retain confirmed receipts without automatic retries. Separate scheduled groups may arrive in a different order. Synthetic recipient checks pass; live LINE rendering remains unverified.
 
 ## How a scheduled message gets sent
 
